@@ -7,28 +7,40 @@ def run(sdk, context: dict[str, Any]) -> dict[str, Any]:
     sdk.log("INFO", "Full SDK demo scenario started")
 
     task_description = str(context.get("task_description") or "hello world")
-    child_prompt = str(context.get("child_prompt") or "hello child request")
-    cancel_prompt = str(context.get("cancel_prompt") or "hello cancelled request")
+    planner_prompt = str(
+        context.get("planner_prompt")
+        or f"Return a short hello world response for this text: {task_description}"
+    )
+    critic_prompt = str(
+        context.get("critic_prompt")
+        or "Check that the answer is concise and safe. Return a short verdict."
+    )
+    cancel_prompt = str(
+        context.get("cancel_prompt")
+        or "Return a very short draft that could be cancelled before execution."
+    )
 
     primary_result = sdk.generate(
-        f"Return a short hello world response for this text: {task_description}"
-    )
-
-    child_request_id = sdk.create_request(
-        prompt=child_prompt,
-        priority=5,
+        planner_prompt,
+        model_type="planner",
         parameters={"temperature": 0},
     )
-    child_initial_status = sdk.get_request_status(child_request_id)
-    child_final_status = sdk.wait_for_completion(child_request_id, timeout=30)
 
-    cancelled_request_id = sdk.create_request(
-        prompt=cancel_prompt,
-        priority=1,
+    critic_operation_id = sdk.start_generation(
+        critic_prompt,
+        model_type="critic",
         parameters={"temperature": 0},
     )
-    cancelled = sdk.cancel_request(cancelled_request_id)
-    cancelled_status = sdk.get_request_status(cancelled_request_id)
+    critic_initial_status = sdk.get_operation_status(critic_operation_id)
+    critic_final_status = sdk.wait_for_operation(critic_operation_id, timeout=30)
+
+    cancelled_operation_id = sdk.start_generation(
+        cancel_prompt,
+        model_type="planner",
+        parameters={"temperature": 0},
+    )
+    cancelled = sdk.cancel_operation(cancelled_operation_id)
+    cancelled_status = sdk.get_operation_status(cancelled_operation_id)
 
     sdk.emit_metric(
         "demo_scenario_runs_total",
@@ -40,13 +52,13 @@ def run(sdk, context: dict[str, Any]) -> dict[str, Any]:
     return {
         "summary": "full sdk demo completed",
         "primary_result": primary_result,
-        "child_request": {
-            "request_id": child_request_id,
-            "initial_status": child_initial_status,
-            "final_status": child_final_status,
+        "critic_operation": {
+            "operation_id": critic_operation_id,
+            "initial_status": critic_initial_status,
+            "final_status": critic_final_status,
         },
-        "cancelled_request": {
-            "request_id": cancelled_request_id,
+        "cancelled_operation": {
+            "operation_id": cancelled_operation_id,
             "cancelled": cancelled,
             "status": cancelled_status,
         },
